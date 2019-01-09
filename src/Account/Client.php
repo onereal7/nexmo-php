@@ -72,6 +72,27 @@ class Client implements ClientAwareInterface
         return $voicePrice;
     }
 
+    /**
+     * Gets full sms pricelist
+     * @return array Array of \Nexmo\Account\SmsPrice
+     */
+    public function getSmsPricelist()
+    {
+        $response = [];
+
+        $body = $this->makeFullPricingRequest('sms');
+
+        $countries = @$body['countries'] ?? [];
+
+        foreach ($countries as $countryData) {
+            $smsPrice = new SmsPrice();
+            $smsPrice->jsonUnserialize($countryData);
+            $response[] = $smsPrice;
+        }
+
+        return $response;
+    }
+
     protected function makePricingRequest($country, $pricingType)
     {
         $queryString = http_build_query([
@@ -80,6 +101,24 @@ class Client implements ClientAwareInterface
 
         $request = new Request(
             $this->getClient()->getRestUrl() . '/account/get-pricing/outbound/'.$pricingType.'?'.$queryString,
+            'GET',
+            'php://temp'
+        );
+
+        $response = $this->client->send($request);
+        $rawBody = $response->getBody()->getContents();
+
+        if ($rawBody === '') {
+            throw new Exception\Server('No results found');
+        }
+
+        return json_decode($rawBody, true);
+    }
+
+    protected function makeFullPricingRequest($pricingType)
+    {
+        $request = new Request(
+            $this->getClient()->getRestUrl() . '/account/get-full-pricing/outbound/'.$pricingType,
             'GET',
             'php://temp'
         );
@@ -192,11 +231,11 @@ class Client implements ClientAwareInterface
     }
 
     protected function get($url) {
-       $request = new Request(
-           $url
-           ,'GET'
-           , 'php://temp'
-           , ['content-type' => 'application/json']
+        $request = new Request(
+            $url
+            ,'GET'
+            , 'php://temp'
+            , ['content-type' => 'application/json']
         );
 
         $response = $this->client->send($request);
